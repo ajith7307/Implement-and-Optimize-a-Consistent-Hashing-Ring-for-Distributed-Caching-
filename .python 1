@@ -1,0 +1,90 @@
+import hashlib
+import bisect
+import random
+from collections import defaultdict
+def hash_value(key: str) -> int:
+    return int(hashlib.sha256(key.encode('utf-8')).hexdigest(), 16)
+
+class ConsistentHashRing:
+    def _init_(self, vnodes_per_node=100):
+        self.vnodes_per_node = vnodes_per_node
+        self.ring = []                   # sorted list of hash positions
+        self.hash_to_node = {}           # hash_position → physical node
+
+    # Add a physical node with virtual nodes
+    def add_node(self, node_id):
+        for i in range(self.vnodes_per_node):
+            vnode_key = f"{node_id}-{i}"
+            h = hash_value(vnode_key)
+            bisect.insert(self.ring, h)
+            self.hash_to_node[h] = node_id
+
+    # Remove a node and its virtual nodes
+    def remove_node(self, node_id):
+        new_ring = []
+        for h in self.ring:
+            if self.hash_to_node[h] != node_id:
+                new_ring.append(h)
+            else:
+                del self.hash_to_node[h]
+        self.ring = new_ring
+
+    # Locate node responsible for a given key
+    def get_node(self, key):
+        h = hash_value(key)
+        idx = bisect.bisect(self.ring, h)
+
+        # Wrap-around case
+        if idx == len(self.ring):
+            idx = 0
+
+        return self.hash_to_node[self.ring[idx]]
+
+def benchmark_distribution(ring, keys):
+    """Measure how evenly keys are distributed across nodes."""
+    counts = defaultdict(int)
+
+    for k in keys:
+        node = ring.get_node(k)
+        counts[node] += 1
+
+    return counts
+
+
+def benchmark_remap_percentage(ring_before, ring_after, keys):
+    """Measure what % of keys get remapped after adding/removing a node."""
+    moved = 0
+
+    for k in keys:
+        if ring_before.get_node(k) != ring_after.get_node(k):
+            moved += 1
+
+    return moved / len(keys) * 100
+
+if __name__ == "_main_":
+    ring = ConsistentHashRing(vnodes_per_node=200)
+
+    # Initial nodes
+    ring.add_node("NodeA")
+    ring.add_node("NodeB")
+    ring.add_node("NodeC")
+
+    # Generate random keys
+    keys = [f"key-{i}" for i in range(10000)]
+
+    # 1. Test Load Distribution
+    dist = benchmark_distribution(ring, keys)
+    print("\nLoad Distribution:")
+    for node, count in dist.items():
+        print(node, ":", count)
+
+    # 2. Test Resilience (Key Remapping)
+    import copy
+    ring_before = copy.deepcopy(ring)
+
+    # Add a new node
+    ring.add_node("NodeD")
+    ring_after = ring
+
+    remap = benchmark_remap_percentage(ring_before, ring_after, keys)
+    print("\nKey Remapping After Adding NodeD:", remap, "%")
