@@ -1,0 +1,2 @@
+# Implement-and-Optimize-a-Consistent-Hashing-Ring-for-Distributed-Caching-
+This project implements a robust, production-ready Consistent Hashing mechanism designed for load balancing and distributed data storage systems such as distributed caches, CDNs, and NoSQL databases. The goal is to minimize data movement during node scaling events (additions/removals) while maintaining even key distribution across nodes.
